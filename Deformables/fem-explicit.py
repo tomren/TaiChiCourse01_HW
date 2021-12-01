@@ -8,7 +8,8 @@ paused = True
 # integration method
 # 1: Co-rotated linear model
 # 2: Venant Kirchhoff model ( StVK )
-integration = 2
+# 3: Neo-Hookean model
+integration = 3
 
 damping_toggle = ti.field(ti.i32, ())
 curser = ti.Vector.field(2, ti.f32, ())
@@ -169,6 +170,20 @@ def compute_gradient():
             grad[a] += ga
             grad[b] += gb
             grad[c] += gc
+        elif integration == 3:
+            J = F.determinant()
+            # first Piola-Kirchhoff tensor
+            Fnt = F.inverse().transpose()
+            P = LameMu[None]*(F-Fnt)+LameLa[None]*ti.log(J)*Fnt
+            #assemble to gradient
+            H = elements_V0[i] * P @ (elements_Dm_inv[i].transpose())
+            a,b,c = triangles[i][0],triangles[i][1],triangles[i][2]
+            gb = ti.Vector([H[0,0], H[1, 0]])
+            gc = ti.Vector([H[0,1], H[1, 1]])
+            ga = -gb-gc
+            grad[a] += ga
+            grad[b] += gb
+            grad[c] += gc
 
 @ti.kernel
 def compute_total_energy():
@@ -185,6 +200,11 @@ def compute_total_energy():
             # Venant-Kirchhoff model
             Estvk = 0.5*(F.transpose()@F - Eye)
             element_energy_density = LameMu[None]*(Estvk@Estvk.transpose()).trace() + 0.5*LameLa[None]*(Estvk).trace() ** 2
+            total_energy[None] += element_energy_density * elements_V0[i]
+        elif integration == 3:
+            J = F.determinant()
+            d = 2
+            element_energy_density = 0.5*LameMu[None]*((J.transpose()@J).trace()-d) + LameMu[None]*ti.log(J) + 0.5*LameLa[None]*ti.log(J)**2
             total_energy[None] += element_energy_density * elements_V0[i]
 
 @ti.kernel
@@ -248,11 +268,12 @@ while gui.running:
     for e in gui.get_events(ti.GUI.PRESS):
         if e.key in [ti.GUI.ESCAPE, ti.GUI.EXIT]:
             exit()
-        elif e.key == 's':
-            if integration == 1:
-                integration = 2
-            else:
-                integration = 1
+        elif e.key == '1':
+            integration =1
+        elif e.key == '2':
+            integration = 2
+        elif e.key == '3':
+           integration = 3
         elif e.key == 'r':
             initialize()
         elif e.key == '0':
@@ -315,10 +336,12 @@ while gui.running:
     # text
     if integration == 1:
         gui.text(content=f'Co-rotated linear model: ', pos=(0.12, 0.98), color=0xFF0000)
-    else:
+    elif integration == 2:
         gui.text(content=f'Venant-Kirchhoff model: ', pos=(0.12, 0.98), color=0xFF0000)
+    else:
+        gui.text(content=f'Neo-Hookean model: ', pos=(0.12, 0.98), color=0xFF0000)
 
-    gui.text(content=f'Press \'s\' to switch model', pos=(0.12, 0.94), color=0xFFFF00)
+    gui.text(content=f'Press \'1,2,3\' to switch model', pos=(0.12, 0.94), color=0xFFFF00)
     gui.text(content=f'Press \'space\' to start', pos=(0.12, 0.90), color=0x00FF00)
 
     gui.text(
