@@ -203,8 +203,9 @@ def compute_total_energy():
             total_energy[None] += element_energy_density * elements_V0[i]
         elif integration == 3:
             J = F.determinant()
+            Jlog = ti.log(J)
             d = 2
-            element_energy_density = 0.5*LameMu[None]*((J.transpose()@J).trace()-d) + LameMu[None]*ti.log(J) + 0.5*LameLa[None]*ti.log(J)**2
+            element_energy_density = 0.5*LameMu[None]*((J.transpose()@J).trace()-d) + LameMu[None]*Jlog + 0.5*LameLa[None]*Jlog**2
             total_energy[None] += element_energy_density * elements_V0[i]
 
 @ti.kernel
